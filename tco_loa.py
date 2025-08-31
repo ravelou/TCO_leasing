@@ -25,6 +25,16 @@ import json
 
 @dataclass
 class EnergyParams:
+    """
+    Parameters related to energy consumption and charging costs for electric vehicles.
+
+    Attributes:
+        kwh_per_100km (float): Energy consumption in kilowatt-hours per 100 kilometers. Default is 17.0.
+        share_free (float): Fraction (between 0 and 1) of energy that is free (not paid for). Default is 0.0.
+        home_price_eur_per_kwh (float): Cost of electricity per kWh when charging at home, in euros. Default is 0.23.
+        public_price_eur_per_kwh (float): Cost of electricity per kWh when charging at public stations, in euros. Default is 0.45.
+        share_home_of_paid (float): Fraction (between 0 and 1) of paid charging that occurs at home (the rest is public charging). Default is 1.0.
+    """
     kwh_per_100km: float = 17.0
     # part gratuite (%) entre 0 et 1
     share_free: float = 0.0
@@ -99,6 +109,15 @@ class DealParams:
 
 @dataclass
 class BuyoutParams:
+    """
+    Represents the parameters related to a buyout option in a leasing or financing context.
+
+    Attributes:
+        enabled (bool): Indicates if the buyout option is enabled.
+        option_fee (float): The fee required to exercise the buyout option.
+        residual_value (float): The residual value of the asset at the end of the lease term.
+        resale_value_after_buyout (Optional[float]): The estimated resale value of the asset after the buyout, if applicable.
+    """
     enabled: bool = False
     option_fee: float = 0.0
     residual_value: float = 0.0
@@ -107,6 +126,19 @@ class BuyoutParams:
 
 @dataclass
 class IKParams:
+    """
+    IKParams holds configuration parameters for vehicle leasing calculations.
+
+    Attributes:
+        enabled (bool): Flag indicating if the parameters are active.
+        vehicle_cv (int): The fiscal horsepower (chevaux fiscaux) of the vehicle.
+        is_electric (bool): Indicates if the vehicle is electric.
+        km_per_day (float): Average kilometers driven per day.
+        company_cap_km_per_day (float): Company-imposed cap on kilometers per day.
+        worked_days (float): Number of days worked (used for calculation).
+        days_is_annual (bool): If True, 'worked_days' is considered annual.
+        annualize (bool): If True, annualizes the calculations based on input data.
+    """
     enabled: bool = False
     vehicle_cv: int = 5
     is_electric: bool = True
@@ -122,15 +154,44 @@ class IKParams:
 
 
 def eur(x: float) -> str:
+    """
+    Formats a float value as a Euro currency string with French-style formatting.
+
+    Args:
+        x (float): The numeric value to format.
+
+    Returns:
+        str: The formatted string representing the value in euros, 
+             with spaces as thousand separators, a comma as the decimal separator, 
+             and the euro symbol appended (e.g., '1 234,56 €').
+    """
     s = f"{x:,.2f} €".replace(",", " ").replace(".", ",")
     return s
 
 
 def pct(x: float) -> str:
+    """
+    Formats a floating-point number as a percentage string with one decimal place.
+
+    Args:
+        x (float): The number to format as a percentage.
+
+    Returns:
+        str: The formatted percentage string (e.g., '12.3%').
+    """
     return f"{x:.1f}%"
 
 
 def years_from_months(months: int) -> float:
+    """
+    Converts a number of months to years.
+
+    Args:
+        months (int): The number of months to convert.
+
+    Returns:
+        float: The equivalent number of years.
+    """
     return months / 12.0
 
 # -----------------------------
