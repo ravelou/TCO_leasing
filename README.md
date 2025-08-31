@@ -13,7 +13,7 @@ This repository provides a Python tool to calculate the Total Cost of Ownership 
 
 ### 1. Prepare a Configuration File
 
-Copy or edit one of the provided sample configs (`config.json`, `zoe.json`, `R5-techno.json`, etc.) to match your lease parameters.
+Copy or edit one of the provided sample configs (`config.json`) to match your lease parameters.
 
 ### 2. Run the Calculator
 
@@ -73,7 +73,7 @@ TOTAL                                    11 587,67 €      313,20 €  100.0%
 
 ## Configuration File Format
 
-See [config.json](config.json), [zoe.json](zoe.json), [R5-techno.json](R5-techno.json), etc. for examples.
+See [config.json](config.json), etc. for examples.
 
 Each config file contains sections for `deal`, `energy`, `maintenance`, `insurance`, `buyout`, and `ik`.
 
@@ -84,4 +84,4 @@ MIT License
 ---
 
 **Author:** Jean  
-**Contact:** [Your Email
+**Contact:** ravelou@gmail.com
