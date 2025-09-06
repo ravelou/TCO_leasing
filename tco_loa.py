@@ -19,8 +19,11 @@ import argparse
 import json
 import os
 import sys
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import mplcursors
+from mplcursors import Selection, Cursor
 # -----------------------------
 # Dataclasses de paramètres
 # -----------------------------
@@ -814,7 +817,7 @@ def tco_cumulatif_par_mois(config: Dict[str, Any]) -> List[float]:
         resale = -float(bo.get("resale_value_after_buyout", 0.0)
                         if bo.get("resale_value_after_buyout", None) is not None else 0.0)
 
-    tco = []
+    tco: List[float] = []
     cumul = upfront + accessoires + autres_fixes + credits
     for m in range(1, months + 1):
         cumul += loyer + energie + entretien + pneus + \
@@ -854,33 +857,36 @@ def plot_tco_comparaison(config_paths: List[str], args: argparse.Namespace):
      Affiche un graphique comparant le TCO cumulatif de plusieurs configs,
      avec tooltip interactif sur la légende.
      """
-    lines = []
-    labels = []
-    tooltips = []
+    lines: list[Line2D] = []
+    labels: list[str] = []
+    tooltips: list[str] = []
     for config_path in config_paths:
         config = merge_overrides(load_config(
             config_path), args)
         tco = tco_cumulatif_par_mois(config)
         months = len(tco)
         label = f"{os.path.basename(config_path)} ({months} mois)"
+        line: Line2D
         line, = plt.plot(range(1, months + 1), tco, label=label)
         lines.append(line)
         labels.append(label)
         tooltips.append(summarize_config(config_path))
-    plt.xlabel("Mois")
-    plt.ylabel("TCO cumulatif (€)")
-    plt.title(
+    plt.xlabel("Mois")  # type: ignore
+    plt.ylabel("TCO cumulatif (€)")  # pyright: ignore[reportUnknownMemberType]
+    plt.title(  # pyright: ignore[reportUnknownMemberType]
         "Comparaison TCO cumulatif de plusieurs leasings")
-    leg = plt.legend()
-    plt.grid(True)
+    leg = plt.legend()  # pyright: ignore[reportUnknownMemberType]
+    plt.grid(True)  # pyright: ignore[reportUnknownMemberType]
     plt.tight_layout()
 
     # Ajout du tooltip interactif sur la légende
-    import mplcursors
-    cursor = mplcursors.cursor(leg.legend_handles, hover=True)
+    # import mplcursors
+    cursor: Cursor
+    cursor = Cursor(
+        leg.legend_handles, hover=True)
 
     @cursor.connect("add")
-    def on_add(sel):
+    def on_add(sel: Selection) -> None:
         idx = leg.legend_handles.index(sel.artist)
         sel.annotation.set_text(tooltips[idx])
         sel.annotation.get_bbox_patch().set(fc="white", alpha=0.95)
