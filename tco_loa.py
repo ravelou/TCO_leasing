@@ -17,7 +17,10 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Tuple
 import argparse
 import json
-
+import os
+import sys
+import matplotlib.pyplot as plt
+import mplcursors
 # -----------------------------
 # Dataclasses de paramètres
 # -----------------------------
@@ -161,8 +164,8 @@ def eur(x: float) -> str:
         x (float): The numeric value to format.
 
     Returns:
-        str: The formatted string representing the value in euros, 
-             with spaces as thousand separators, a comma as the decimal separator, 
+        str: The formatted string representing the value in euros,
+             with spaces as thousand separators, a comma as the decimal separator,
              and the euro symbol appended (e.g., '1 234,56 €').
     """
     s = f"{x:,.2f} €".replace(",", " ").replace(".", ",")
@@ -300,7 +303,7 @@ def parse_args() -> argparse.Namespace:
     """
     ap = argparse.ArgumentParser(
         description="TCO LOA + IK (France) + pénalité de dépassement kilométrique")
-    ap.add_argument("--config", type=str, required=True,
+    ap.add_argument("--config", type=str, required=False,
                     help="Chemin du fichier JSON de configuration")
     # Overrides deal
     ap.add_argument("--months", type=int, help="Durée en mois")
@@ -382,6 +385,9 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--ik_annualize", dest="ik_annualize", action="store_true",
                     help="Annualiser (barème appliqué chaque année)")
     ap.set_defaults(ik_annualize=None)
+
+    ap.add_argument("--compare_configs", nargs="+", type=str,
+                    help="Liste de fichiers de config à comparer")
 
     return ap.parse_args()
 
@@ -584,7 +590,7 @@ def compute_tires_cost(config: Dict[str, Any]) -> float:
     Calculates the total cost of extra tire sets required, based on the configuration provided.
 
     Args:
-      config (Dict[str, Any]): A dictionary containing maintenance configuration. 
+      config (Dict[str, Any]): A dictionary containing maintenance configuration.
         Expected keys in config["maintenance"]:
           - "tire_set_cost" (float or str, optional): Cost per tire set. Defaults to 700.0 if not provided.
           - "tire_sets_included" (int or str, optional): Number of tire sets included. Defaults to 0 if not provided.
@@ -723,7 +729,7 @@ def format_rows(rows: List[Tuple[str, float]], deal: Dict[str, Any], title: str)
 
     Args:
       rows (List[Tuple[str, float]]): A list of tuples, each containing a label (str) and a value (float) representing financial items.
-      deal (Dict[str, Any]): A dictionary containing deal information, such as contract duration and mileage.
+      deal (Dict[str, Any): A dictionary containing deal information, such as contract duration and mileage.
       title (str): The title to display at the top of the summary.
 
     Behavior:
@@ -753,11 +759,133 @@ def format_rows(rows: List[Tuple[str, float]], deal: Dict[str, Any], title: str)
         part = (value / total * 100.0) if abs(total) > 1e-9 else 0.0
         print(f"{label:<42} {eur(value):>14} {eur(per_month):>14} {pct(part):>7}")
     print("-" * 84)
-    print(f"{'TOTAL':<42} {eur(total):>14} {eur(total / months if months>0 else 0.0):>14} {pct(100.0):>7}")
+    print(f"{'TOTAL':<42} {eur(total):>14} {eur(total / months if months > 0 else 0.0):>14} {pct(100.0):>7}")
 
 # -----------------------------
 # Programme principal
 # -----------------------------
+
+
+def tco_cumulatif_par_mois(config: Dict[str, Any]) -> List[float]:
+    """
+    Calcule le TCO cumulatif mois par mois pour une configuration donnée.
+    Retourne une liste de TCO cumulatif pour chaque mois (1 à N).
+    """
+    deal = config.setdefault("deal", {})
+    energy = config.setdefault("energy", {})
+    maint = config.setdefault("maintenance", {})
+    ins = config.setdefault("insurance", {})
+    bo = config.setdefault("buyout", {})
+    ik = config.setdefault("ik", {})
+
+    months = int(deal.get("months", 48))
+
+    # Répartition linéaire des coûts récurrents
+    loyer = float(deal.get("monthly_rent", 0.0))
+    energie = compute_energy_cost(config) / months
+    entretien = compute_maintenance_cost(config) / months
+    pneus = compute_tires_cost(config) / months
+    assurance = compute_insurance_cost(config) / months
+
+    # Coûts fixes au début
+    upfront = float(deal.get("upfront_costs", 0.0))
+    accessoires = float(deal.get("accessories_total", 0.0))
+    autres_fixes = float(deal.get("other_fixed_costs", 0.0))
+    credits = -abs(float(deal.get("charging_credits_total", 0.0)))
+    # IK (déduites)
+    ik_total = -compute_ik_amount_total(config)
+    ik_mensuel = ik_total / months if months > 0 else 0.0
+
+    # Pénalité dépassement (on lisse sur la durée)
+    excess_penalty = compute_excess_mileage_penalty(config)
+    excess_mensuel = excess_penalty / months if months > 0 else 0.0
+
+    # Frais de restitution ou rachat (fin de contrat)
+    buyout_enabled = bool(bo.get("enabled", False))
+    if not buyout_enabled:
+        restitution = float(deal.get("restitution_fees", 0.0))
+        option_fee = 0.0
+        vr = 0.0
+        resale = 0.0
+    else:
+        restitution = 0.0
+        option_fee = float(bo.get("option_fee", 0.0))
+        vr = float(bo.get("residual_value", 0.0))
+        resale = -float(bo.get("resale_value_after_buyout", 0.0)
+                        if bo.get("resale_value_after_buyout", None) is not None else 0.0)
+
+    tco = []
+    cumul = upfront + accessoires + autres_fixes + credits
+    for m in range(1, months + 1):
+        cumul += loyer + energie + entretien + pneus + \
+            assurance + ik_mensuel + excess_mensuel
+        # Ajout des frais de fin au dernier mois
+        if m == months:
+            cumul += restitution + option_fee + vr + resale
+        tco.append(cumul)
+    return tco
+
+
+def summarize_config(config_path: str) -> str:
+    """
+    Résume les infos principales d'une config pour affichage dans le tooltip.
+    """
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            conf = json.load(f)
+        deal = conf.get("deal", {})
+        resume = (
+            f"Fichier: {os.path.basename(config_path)}\n"
+            f"Loyer: {deal.get('monthly_rent', '?')} €/mois\n"
+            f"Durée: {deal.get('months', '?')} mois\n"
+            f"Km/an: {deal.get('annual_km', '?')}\n"
+            f"Assurance: {conf.get('insurance', {}).get('eur_per_month', '?')} €/mois\n"
+            f"Entretien: {conf.get('maintenance', {}).get('maint_eur_per_year', '?')} €/an\n"
+            f"Pneus: {conf.get('maintenance', {}).get('tire_set_cost', '?')} €/train\n"
+            f"Frais initiaux: {deal.get('upfront_costs', '?')} €\n"
+        )
+        return resume
+    except Exception as e:
+        return f"Erreur lecture {config_path}: {e}"
+
+
+def plot_tco_comparaison(config_paths: List[str], args: argparse.Namespace):
+    """
+     Affiche un graphique comparant le TCO cumulatif de plusieurs configs,
+     avec tooltip interactif sur la légende.
+     """
+    lines = []
+    labels = []
+    tooltips = []
+    for config_path in config_paths:
+        config = merge_overrides(load_config(
+            config_path), args)
+        tco = tco_cumulatif_par_mois(config)
+        months = len(tco)
+        label = f"{os.path.basename(config_path)} ({months} mois)"
+        line, = plt.plot(range(1, months + 1), tco, label=label)
+        lines.append(line)
+        labels.append(label)
+        tooltips.append(summarize_config(config_path))
+    plt.xlabel("Mois")
+    plt.ylabel("TCO cumulatif (€)")
+    plt.title(
+        "Comparaison TCO cumulatif de plusieurs leasings")
+    leg = plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    # Ajout du tooltip interactif sur la légende
+    import mplcursors
+    cursor = mplcursors.cursor(leg.legend_handles, hover=True)
+
+    @cursor.connect("add")
+    def on_add(sel):
+        idx = leg.legend_handles.index(sel.artist)
+        sel.annotation.set_text(tooltips[idx])
+        sel.annotation.get_bbox_patch().set(fc="white", alpha=0.95)
+
+    plt.show()
 
 
 def main():
@@ -777,6 +905,10 @@ def main():
       None
     """
     args = parse_args()
+    if args.compare_configs:
+        plot_tco_comparaison(args.compare_configs, args)
+        sys.exit(0)
+
     config = load_config(args.config)
     config = merge_overrides(config, args)
 
@@ -851,9 +983,9 @@ def main():
         add_row(rows, "Revente (déduite)", -float(resale)
                 if resale is not None else 0.0)
 
-    # Impression
-    scenario_title = "=== TCO LOA (détail par poste + coût mensuel + IK + dépassement km) ==="
-    format_rows(rows, deal, scenario_title)
+        # Impression
+        scenario_title = "=== TCO LOA (détail par poste + coût mensuel + IK + dépassement km) ==="
+        format_rows(rows, deal, scenario_title)
 
 
 if __name__ == "__main__":

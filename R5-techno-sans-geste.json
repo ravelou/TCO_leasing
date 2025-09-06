@@ -1,0 +1,48 @@
+{
+  "deal": {
+    "monthly_rent": 195,
+    "months": 37,
+    "annual_km": 18000,
+    "actual_annual_km": 18000,
+    "actual_total_km": null,
+    "excess_rate_eur_per_km": 0.08,
+    "excess_free_km": 0,
+    "upfront_costs": 2300,
+    "accessories_total": 0,
+    "other_fixed_costs": 0,
+    "charging_credits_total": 0,
+    "restitution_fees": 0
+  },
+  "energy": {
+    "kwh_per_100km": 17,
+    "share_free": 0.2,
+    "home_price_eur_per_kwh": 0.03,
+    "public_price_eur_per_kwh": 0.45,
+    "share_home_of_paid": 1.0
+  },
+  "maintenance": {
+    "maint_eur_per_year": 200,
+    "tire_set_cost": 500,
+    "tire_sets_included": 0,
+    "expected_tire_sets_total": 1
+  },
+  "insurance": {
+    "eur_per_month": 75
+  },
+  "buyout": {
+    "enabled": false,
+    "option_fee": 0,
+    "residual_value": 0,
+    "resale_value_after_buyout": null
+  },
+  "ik": {
+    "enabled": true,
+    "vehicle_cv": 5,
+    "is_electric": true,
+    "km_per_day": 40,
+    "company_cap_km_per_day": 54,
+    "worked_days": 210,
+    "days_is_annual": true,
+    "annualize": true
+  }
+}
