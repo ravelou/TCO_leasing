@@ -27,6 +27,15 @@ You can override any parameter from the command line. For example:
 python3 tco_loa.py --config config.json --months 36 --monthly_rent 250 --actual_annual_km 18000
 ```
 
+### 2b. Graphical Interface (comparison of 2 to 6 vehicles)
+
+```sh
+pip install -r requirements.txt
+streamlit run tco_loa_web.py
+```
+
+The sidebar has one panel per vehicle. Each panel starts from a sample file of the repository (or from a JSON file you upload) and every parameter can be edited. The main area shows the total TCO and monthly cost per vehicle, a cost breakdown table (downloadable as CSV), the cumulative TCO curve, the TCO at a chosen month, and a breakdown chart. The calculations are the same as the command-line tool.
+
 ### 3. Command-Line Options
 
 - `--config`: Path to the JSON configuration file (required).

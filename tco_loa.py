@@ -726,7 +726,7 @@ def add_row(rows: List[Tuple[str, float]], label: str, value: float):
     rows.append((label, float(value)))
 
 
-def format_rows(rows: List[Tuple[str, float]], deal: Dict[str, Any], title: str):
+def format_rows(rows: List[Tuple[str, float]], deal: Dict[str, Any], title: str, buyout: bool):
     """
     Formats and prints a summary table of financial rows for a vehicle deal scenario.
 
@@ -734,10 +734,11 @@ def format_rows(rows: List[Tuple[str, float]], deal: Dict[str, Any], title: str)
       rows (List[Tuple[str, float]]): A list of tuples, each containing a label (str) and a value (float) representing financial items.
       deal (Dict[str, Any): A dictionary containing deal information, such as contract duration and mileage.
       title (str): The title to display at the top of the summary.
+      buyout (bool): True if the buyout scenario is selected, False for restitution.
 
     Behavior:
       - Calculates contract and actual mileage, displaying both if they differ.
-      - Determines scenario type (buyout or restitution) based on row labels.
+      - Prints the scenario type (buyout or restitution).
       - Prints a formatted table with columns for label, total amount, monthly amount, and percentage share.
       - Displays totals at the bottom of the table.
 
@@ -752,8 +753,7 @@ def format_rows(rows: List[Tuple[str, float]], deal: Dict[str, Any], title: str)
         header_km += f" | Réel: {int(round(actual_km))} km"
     print(title)
     print(f"Durée: {months} mois | {header_km}\n")
-    print("-- Scénario BUYOUT --" if any(lbl.startswith("Frais d’option")
-          for lbl, _ in rows) else "-- Scénario RESTITUTION --")
+    print("-- Scénario BUYOUT --" if buyout else "-- Scénario RESTITUTION --")
     print(f"{'Poste':<42} {'Total (€)':>14} {'/mois (€)':>14} {'Part':>7}")
     print("-" * 84)
     total = sum(v for _, v in rows)
@@ -894,36 +894,24 @@ def plot_tco_comparaison(config_paths: List[str], args: argparse.Namespace):
     plt.show()
 
 
-def main():
+def build_rows(config: Dict[str, Any]) -> List[Tuple[str, float]]:
     """
-    Main entry point for calculating the Total Cost of Ownership (TCO) for a LOA (leasing with option to buy) scenario.
+    Construit les postes de coût (total sur toute la durée) d'une configuration.
 
-    This function:
-    - Parses command-line arguments and loads configuration.
-    - Merges any overrides from the arguments into the configuration.
-    - Initializes configuration sections for deal, energy, maintenance, insurance, buyout, and mileage indemnities.
-    - Computes the total cost for each relevant category (rents, energy, maintenance, tires, insurance, registration, accessories, fixed costs, charging credits, excess mileage penalties, mileage indemnities).
-    - Handles the scenario for either returning the vehicle or buying it out at the end of the lease, including associated fees and resale value.
-    - Aggregates all cost items into a list of rows.
-    - Formats and prints a detailed breakdown of costs, including monthly cost, mileage indemnities, and excess mileage penalties.
+    Les postes sont toujours les mêmes et dans le même ordre, quel que soit le scénario,
+    pour que plusieurs configurations puissent être comparées ligne à ligne.
+    Les crédits et IK sont négatifs (déduits). La somme des postes égale le dernier
+    point de tco_cumulatif_par_mois().
+
+    Args:
+      config (Dict[str, Any]): Configuration complète (sections deal, energy, ...).
 
     Returns:
-      None
+      List[Tuple[str, float]]: Liste (libellé, montant total en €).
     """
-    args = parse_args()
-    if args.compare_configs:
-        plot_tco_comparaison(args.compare_configs, args)
-        sys.exit(0)
-
-    config = load_config(args.config)
-    config = merge_overrides(config, args)
-
-    deal = config.setdefault("deal", {})
-    energy = config.setdefault("energy", {})
-    maint = config.setdefault("maintenance", {})
-    ins = config.setdefault("insurance", {})
-    bo = config.setdefault("buyout", {})
-    ik = config.setdefault("ik", {})
+    ensure_sections(config)
+    deal = config["deal"]
+    bo = config["buyout"]
 
     months = int(deal.get("months", 48))
 
@@ -989,9 +977,36 @@ def main():
         add_row(rows, "Revente (déduite)", -float(resale)
                 if resale is not None else 0.0)
 
-        # Impression
-        scenario_title = "=== TCO LOA (détail par poste + coût mensuel + IK + dépassement km) ==="
-        format_rows(rows, deal, scenario_title)
+    return rows
+
+
+def main():
+    """
+    Main entry point for calculating the Total Cost of Ownership (TCO) for a LOA (leasing with option to buy) scenario.
+
+    This function:
+    - Parses command-line arguments and loads configuration.
+    - Merges any overrides from the arguments into the configuration.
+    - Builds the cost rows for each relevant category (see build_rows).
+    - Formats and prints a detailed breakdown of costs, including monthly cost, mileage indemnities, and excess mileage penalties.
+
+    Returns:
+      None
+    """
+    args = parse_args()
+    if args.compare_configs:
+        plot_tco_comparaison(args.compare_configs, args)
+        sys.exit(0)
+
+    config = load_config(args.config)
+    config = merge_overrides(config, args)
+
+    rows = build_rows(config)
+
+    # Impression
+    scenario_title = "=== TCO LOA (détail par poste + coût mensuel + IK + dépassement km) ==="
+    format_rows(rows, config["deal"], scenario_title,
+                buyout=bool(config["buyout"].get("enabled", False)))
 
 
 if __name__ == "__main__":
